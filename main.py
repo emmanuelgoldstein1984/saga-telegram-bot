@@ -309,6 +309,8 @@ if __name__ == "__main__":
 			for offer in matching_offers:
 				post_offer_to_telegram(offer, chat_id)
 
+			time.sleep(60*30)
+
 		# finally add to known offers
 		add_offers_to_known_offers(current_offers)
 
