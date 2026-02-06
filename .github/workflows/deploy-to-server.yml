@@ -24,18 +24,20 @@ jobs:
           ssh-keyscan -H ${{ inputs.server_host }} >> ~/.ssh/known_hosts
 
       - name: Create config.json from secret
+        env:
+          BOT_CONFIG: ${{ secrets.BOT_CONFIG }}
         run: |
-          echo '${{ secrets.BOT_CONFIG }}' > config.json
+          echo "$BOT_CONFIG" > config.json
 
       - name: Copy files to server
         run: |
           rsync -avz --exclude='.git' --exclude='*.pyc' --exclude='__pycache__' \
-            -e "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no" \
+            -e "ssh -i ~/.ssh/id_rsa" \
             ./ ${{ secrets.SSH_USER }}@${{ inputs.server_host }}:~/saga-telegram-bot/
 
       - name: Deploy Docker container on server
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+          ssh -i ~/.ssh/id_rsa \
             ${{ secrets.SSH_USER }}@${{ inputs.server_host }} << 'EOF'
             cd ~/saga-telegram-bot
             
