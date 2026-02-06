@@ -1,0 +1,63 @@
+name: Deploy to Server
+
+on:
+  workflow_dispatch:
+    inputs:
+      server_host:
+        description: 'Server hostname or IP address'
+        required: true
+        type: string
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ inputs.server_host }} >> ~/.ssh/known_hosts
+
+      - name: Create config.json from secret
+        run: |
+          echo '${{ secrets.BOT_CONFIG }}' > config.json
+
+      - name: Copy files to server
+        run: |
+          rsync -avz --exclude='.git' --exclude='*.pyc' --exclude='__pycache__' \
+            -e "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no" \
+            ./ ${{ secrets.SSH_USER }}@${{ inputs.server_host }}:~/saga-telegram-bot/
+
+      - name: Deploy Docker container on server
+        run: |
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            ${{ secrets.SSH_USER }}@${{ inputs.server_host }} << 'EOF'
+            cd ~/saga-telegram-bot
+            
+            # Stop and remove existing container if it exists
+            docker stop sagabot_i 2>/dev/null || true
+            docker rm sagabot_i 2>/dev/null || true
+            
+            # Build new Docker image
+            docker build -t sagabot ./ --no-cache
+            
+            # Run new container with restart policy
+            docker run -d --name sagabot_i --restart=always sagabot
+            
+            # Show container status
+            docker ps | grep sagabot_i
+            
+            # Show recent logs
+            echo "Recent logs:"
+            docker logs --tail 20 sagabot_i
+          EOF
+
+      - name: Clean up SSH key
+        if: always()
+        run: |
+          rm -f ~/.ssh/id_rsa
